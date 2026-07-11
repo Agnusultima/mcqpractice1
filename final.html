@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Polish Quiz Application</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <style>
+        /* --- DESIGN TOKENS & VARIABLES --- */
+        :root {
+            --primary-accent: #2563eb;
+            --primary-muted-light: #eff6ff;
+            --success-green: #10b981;
+            --success-light: #ecfdf5;
+            --danger-red: #ef4444;
+            --danger-light: #fef2f2;
+            --text-main: #1f2937;
+            --text-muted: #4b5563;
+            --card-background: #ffffff;
+            --borders: #e5e7eb;
+            --purple-bg: #e0e7ff;
+            --purple-text: #4338ca;
+            --amber-bg: #fef3c7;
+            --amber-text: #92400e;
+            --font-family: 'Inter', sans-serif;
+        }
+
+        /* --- GLOBAL STYLING --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: #f3f4f6;
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        /* --- APP CONTAINER --- */
+        .app-container {
+            width: 100%;
+            max-width: 1050px; /* Expanded slightly to account for the dual-column desktop layout matrix */
+            background-color: var(--card-background);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* --- HEADER --- */
+        .app-header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--borders);
+        }
+
+        .app-header h1 {
+            color: var(--primary-accent);
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .app-header p {
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 400;
+        }
+
+        /* --- MODE TABS (Quiz vs Import) --- */
+        .mode-selector {
+            display: flex;
+            gap: 12px;
+            border-bottom: 2px solid var(--borders);
+            padding-bottom: 4px;
+        }
+
+        .mode-tab {
+            padding: 8px 16px;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-muted);
+            cursor: pointer;
+            border: none;
+            background: none;
+            position: relative;
+            transition: color 0.2s;
+        }
+
+        .mode-tab.active {
+            color: var(--primary-accent);
+        }
+
+        .mode-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background-color: var(--primary-accent);
+            border-radius: 3px;
+        }
+
+        /* --- WORKSPACE VIEWS --- */
+        .workspace-view {
+            display: none;
+        }
+
+        .workspace-view.active {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* --- DUAL COLUMN QUIZ WORKSPACE LAYOUT --- */
+        .quiz-split-layout {
+            display: grid;
+            grid-template-columns: 1fr 260px;
+            gap: 24px;
+            align-items: start;
+        }
+
+        .main-quiz-track {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* --- QUESTION NAVIGATION GRID PANEL --- */
+        .nav-panel {
+            border: 1px solid var(--borders);
+            border-radius: 10px;
+            padding: 16px;
+            background-color: #fafafa;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .nav-panel-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--borders);
+            padding-bottom: 8px;
+        }
+
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+            gap: 8px;
+            max-height: 320px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .nav-node {
+            height: 42px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        /* Node Color States Matrix */
+        .nav-node.unattended {
+            background-color: #f3f4f6;
+            color: var(--text-main);
+        }
+        .nav-node.unattended:hover {
+            background-color: var(--borders);
+        }
+
+        .nav-node.current-active {
+            background-color: var(--primary-accent) !important;
+            color: #ffffff !important;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+            font-weight: 700;
+        }
+
+        .nav-node.passed-correct {
+            background-color: var(--success-green);
+            color: #ffffff;
+        }
+
+        .nav-node.passed-incorrect {
+            background-color: var(--danger-red);
+            color: #ffffff;
+        }
+
+        /* --- TOPIC FILTERS --- */
+        .topic-filters {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding-bottom: 4px;
+            scrollbar-width: thin;
+        }
+
+        .topic-filters::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .topic-filters::-webkit-scrollbar-thumb {
+            background-color: var(--borders);
+            border-radius: 4px;
+        }
+
+        .filter-pill {
+            padding: 8px 16px;
+            border-radius: 9999px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-pill.active {
+            background-color: var(--primary-accent);
+            color: #ffffff;
+            border: 1px solid var(--primary-accent);
+        }
+
+        .filter-pill.inactive {
+            background-color: #ffffff;
+            color: var(--text-main);
+            border: 1px solid var(--borders);
+        }
+
+        /* --- DASHBOARD STATUS BANNER --- */
+        .status-banner {
+            background-color: var(--primary-muted-light);
+            padding: 14px 20px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-banner span {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-main);
+        }
+
+        /* --- PROGRESS BAR --- */
+        .progress-container {
+            width: 100%;
+            height: 8px;
+            background-color: var(--borders);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: var(--primary-accent);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        /* --- QUESTION AREA --- */
+        .question-meta {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-id {
+            background-color: var(--purple-bg);
+            color: var(--purple-text);
+        }
+
+        .badge-category {
+            background-color: var(--amber-bg);
+            color: var(--amber-text);
+        }
+
+        .question-text {
+            font-size: 17px;
+            font-weight: 700;
+            line-height: 1.5;
+            color: var(--text-main);
+        }
+
+        /* --- OPTIONS SELECTION BLOCK --- */
+        .options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .option-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 14px 18px;
+            border: 2px solid var(--borders);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: var(--card-background);
+        }
+
+        .option-prefix {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+
+        .option-content {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        /* Hover & Active System states */
+        .option-row:hover:not(.disabled) {
+            background-color: var(--primary-muted-light);
+            border-color: var(--primary-accent);
+        }
+
+        .option-row.selected {
+            background-color: var(--primary-muted-light);
+            border-color: var(--primary-accent);
+        }
+
+        /* Correct Answer State */
+        .option-row.correct {
+            background-color: var(--success-light) !important;
+            border-color: var(--success-green) !important;
+        }
+        .option-row.correct .option-content {
+            color: #065f46;
+        }
+        .option-row.correct .option-prefix {
+            background-color: var(--success-green) !important;
+            color: #ffffff !important;
+        }
+
+        /* Incorrect Answer State */
+        .option-row.incorrect {
+            background-color: var(--danger-light) !important;
+            border-color: var(--danger-red) !important;
+        }
+        .option-row.incorrect .option-content {
+            color: #991b1b;
+        }
+        .option-row.incorrect .option-prefix {
+            background-color: var(--danger-red) !important;
+            color: #ffffff !important;
+        }
+
+        .option-row.disabled {
+            cursor: not-allowed;
+        }
+
+        /* --- EXPLANATION COMPONENT --- */
+        .explanation-card {
+            display: none;
+            background-color: #f9fafb;
+            border: 1px dashed var(--text-muted);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 8px;
+        }
+
+        .explanation-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--success-green);
+            font-weight: 700;
+            font-size: 15px;
+            margin-bottom: 6px;
+        }
+
+        .explanation-body {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* --- WORKSPACE ACTIONS (FOOTER NAVIGATION) --- */
+        .workspace-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            gap: 16px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-back {
+            background-color: var(--borders);
+            color: var(--text-main);
+        }
+
+        .btn-back:hover {
+            background-color: #d1d5db;
+        }
+
+        .btn-action {
+            background-color: var(--primary-accent);
+            color: #ffffff;
+            flex-grow: 1;
+            justify-content: center;
+        }
+
+        .btn-action:hover:not(:disabled) {
+            background-color: #1d4ed8;
+        }
+
+        .btn-action:disabled {
+            background-color: #d1d5db;
+            color: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        /* --- SUMMARY EVALUATION VIEW --- */
+        .results-view {
+            text-align: center;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            padding: 20px 0;
+        }
+
+        .hero-graphic {
+            font-size: 64px;
+            color: #f59e0b;
+        }
+
+        .score-display {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--primary-accent);
+        }
+
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .analytics-card {
+            background-color: var(--card-background);
+            border: 1px solid var(--borders);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .analytics-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+
+        .analytics-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .btn-full {
+            width: 100%;
+            justify-content: center;
+            background-color: var(--primary-accent);
+            color: #ffffff;
+        }
+
+        /* --- EXCEL FILE UPLOAD STYLES --- */
+        .import-instructions {
+            background-color: #f9fafb;
+            border-left: 4px solid var(--primary-accent);
+            padding: 12px 16px;
+            font-size: 14px;
+            color: var(--text-muted);
+            border-radius: 0 8px 8px 0;
+        }
+
+        .import-table-demo {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 8px;
+            text-align: left;
+        }
+
+        .import-table-demo th, .import-table-demo td {
+            border: 1px solid var(--borders);
+            padding: 6px 8px;
+        }
+
+        .import-table-demo th {
+            background-color: #f3f4f6;
+        }
+
+        .upload-container {
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .upload-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed var(--primary-accent);
+            background-color: var(--primary-muted-light);
+            border-radius: 8px;
+            padding: 40px 20px;
+            cursor: pointer;
+            text-align: center;
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-main);
+            transition: all 0.2s ease;
+        }
+
+        .upload-box:hover {
+            background-color: #e0f2fe;
+            border-color: #1d4ed8;
+        }
+
+        .upload-box input[type="file"] {
+            display: none;
+        }
+
+        .import-status {
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* --- RESPONSIVENESS & ADAPTABILITY --- */
+        @media (max-width: 768px) {
+            .quiz-split-layout {
+                grid-template-columns: 1fr; /* Stacks navigation block safely on tablets or smaller screens */
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .app-container {
+                padding: 16px;
+                gap: 16px;
+            }
+
+            .app-header h1 {
+                font-size: 22px;
+            }
+
+            .question-text {
+                font-size: 15px;
+            }
+
+            .option-row {
+                padding: 10px 14px;
+                gap: 12px;
+            }
+
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header class="app-header">
+            <h1 id="dynamic-title">Interactive Training Module</h1>
+            <p id="dynamic-subtitle">Select standard question layers or ingest native Excel datasets</p>
+        </header>
+
+        <nav class="mode-selector">
+            <button class="mode-tab active" id="tab-quiz" onclick="switchMode('quiz')"><i class="fa-solid fa-graduation-cap"></i> Practice Mode</button>
+            <button class="mode-tab" id="tab-import" onclick="switchMode('import')"><i class="fa-solid fa-file-excel"></i> Upload Custom Excel</button>
+        </nav>
+
+        <main class="workspace-view active" id="view-quiz">
+            <div class="topic-filters" id="topic-container"></div>
+
+            <div class="quiz-split-layout">
+                
+                <div class="main-quiz-track">
+                    <div class="status-banner">
+                        <span id="question-index-tracker">Question 0 of 0</span>
+                        <span id="score-tracker">Score: 0</span>
+                    </div>
+
+                    <div class="progress-container">
+                        <div class="progress-bar" id="quiz-progress"></div>
+                    </div>
+
+                    <div class="question-container">
+                        <div class="question-meta">
+                            <span class="badge badge-id" id="badge-q-id">Q-ID: --</span>
+                            <span class="badge badge-category" id="badge-q-cat">Category: --</span>
+                        </div>
+                        <div class="question-text" id="question-text-area">
+                            Loading configuration dataset...
+                        </div>
+                    </div>
+
+                    <div class="options-list" id="options-wrapper"></div>
+
+                    <div class="explanation-card" id="explanation-box">
+                        <div class="explanation-header">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <span>Answer Key Verification:</span>
+                        </div>
+                        <div class="explanation-body" id="explanation-text">--</div>
+                    </div>
+
+                    <footer class="workspace-footer">
+                        <button class="btn btn-back" id="btn-prev" onclick="handlePrev()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+                        <button class="btn btn-action" id="btn-submit" onclick="handleSubmit()" disabled>Submit Answer <i class="fa-solid fa-check"></i></button>
+                    </footer>
+                </div>
+
+                <aside class="nav-panel">
+                    <div class="nav-panel-title">Question Navigator</div>
+                    <div class="nav-grid" id="navigation-matrix-grid">
+                        </div>
+                </aside>
+
+            </div>
+        </main>
+
+        <section class="workspace-view" id="view-import">
+            <div class="import-instructions">
+                <strong><i class="fa-solid fa-circle-info"></i> Excel Structural Layout Rules:</strong>
+                <p style="margin-top: 4px;">For successful compiler integration, verify that your workbook matches this layout order exactly. Row 1 can contain names/headers; the parser handles content entries cleanly.</p>
+                
+                <table class="import-table-demo">
+                    <thead>
+                        <tr>
+                            <th>Col 1: Q#</th>
+                            <th>Col 2: Question</th>
+                            <th>Col 3: Option A</th>
+                            <th>Col 4: Option B</th>
+                            <th>Col 5: Option C</th>
+                            <th>Col 6: Option D</th>
+                            <th>Col 7: Correct</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td>Sample Question Syntax?</td>
+                            <td>Option text A</td>
+                            <td>Option text B</td>
+                            <td>Option text C</td>
+                            <td>Option text D</td>
+                            <td>A</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="upload-container">
+                <label for="excel-file-input" class="upload-box">
+                    <i class="fa-solid fa-cloud-arrow-up" style="font-size: 36px; color: var(--primary-accent); margin-bottom: 12px;"></i>
+                    <span>Click to browse or drop your workbook file here</span>
+                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 400; margin-top: 6px;">Supports .xlsx, .xls binary sheets</span>
+                    <input type="file" id="excel-file-input" accept=".xlsx, .xls" onchange="handleExcelUpload(event)">
+                </label>
+            </div>
+
+            <div class="import-status" id="parse-status-message"></div>
+        </section>
+
+        <section class="workspace-view" id="view-results">
+            <div class="results-view" id="results-anchor">
+                <div class="hero-graphic"><i class="fa-solid fa-trophy"></i></div>
+                <div>
+                    <h2 style="font-size: 24px; font-weight: 700; margin-bottom: 4px;">Evaluation Module Complete!</h2>
+                    <p style="color: var(--text-muted); font-size: 14px;">Review your structural processing score down below.</p>
+                </div>
+
+                <div class="score-display" id="metric-score-ratio">00/00</div>
+
+                <div class="analytics-grid">
+                    <div class="analytics-card">
+                        <div class="analytics-label">Accuracy Rate</div>
+                        <div class="analytics-value" id="metric-accuracy">0%</div>
+                    </div>
+                    <div class="analytics-card">
+                        <div class="analytics-label">Total Practiced</div>
+                        <div class="analytics-value" id="metric-total">0</div>
+                    </div>
+                </div>
+
+                <button class="btn btn-full" onclick="resetQuizState()"><i class="fa-solid fa-rotate-left"></i> Restart & Re-Practice</button>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Core Mock Database Engine
+        const defaultDataset = [
+            { id: "Q-101", category: "Tally.ERP 9", question: "Which core registry functional menu handles configuration adjustments inside Tally?", options: { A: "F11: Features", B: "F12: Configure", C: "Alt + F3", D: "Ctrl + M" }, correct: "B", explanation: "F12 handles system and ecosystem structural parameters configuration options across ledger items." },
+            { id: "Q-102", category: "MS Word", question: "What natively executed macro process sequence combination changes structural page line separation constraints fast?", options: { A: "Ctrl + 1", B: "Ctrl + 2", C: "Ctrl + 5", D: "Ctrl + Delete" }, correct: "B", explanation: "Executing Ctrl + 2 adjusts standard configuration frameworks dynamically targeting 2.0 point vertical separation limits." },
+            { id: "Q-103", category: "Tally.ERP 9", question: "Which primary ledger module contains configuration variables allocating user validation assets inside enterprise layers?", options: { A: "Alt + F1", B: "F1", C: "Alt + F2", D: "Ctrl + F1" }, correct: "A", explanation: "Alt + F1 is systematically mapped within inventory models to trigger instant close/open configuration states." },
+            { id: "Q-104", category: "MS Word", question: "Which file extension is fundamentally configured to support templates inside modern macro iterations?", options: { A: ".docx", B: ".docm", C: ".dotx", D: ".txt" }, correct: "C", explanation: ".dotx defines an optimized structural template deployment platform without embedded automated macro execution scripts." }
+        ];
+
+        // Active Environment Global Storage States
+        let globalDatabase = [...defaultDataset];
+        let runningDatabase = [...defaultDataset];
+        let currentIdx = 0;
+        let runningScore = 0;
+        let chosenCategory = "All Questions";
+        let trackingSelections = {}; 
+        let internalSelectionKey = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            compileCategories();
+            initializeQuizWorkspace();
+        });
+
+        function switchMode(targetMode) {
+            document.querySelectorAll('.mode-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.workspace-view').forEach(view => view.classList.remove('active'));
+            
+            if (targetMode === 'quiz') {
+                document.getElementById('tab-quiz').classList.add('active');
+                document.getElementById('view-quiz').classList.add('active');
+            } else if (targetMode === 'import') {
+                document.getElementById('tab-import').classList.add('active');
+                document.getElementById('view-import').classList.add('active');
+            }
+        }
+
+        function compileCategories() {
+            const listContainer = document.getElementById('topic-container');
+            listContainer.innerHTML = '';
+            const distinctCategories = ["All Questions", ...new Set(globalDatabase.map(q => q.category))];
+            
+            distinctCategories.forEach(cat => {
+                const buttonPill = document.createElement('button');
+                buttonPill.className = `filter-pill ${cat === chosenCategory ? 'active' : 'inactive'}`;
+                buttonPill.innerText = cat;
+                buttonPill.onclick = () => filterActiveCategory(cat);
+                listContainer.appendChild(buttonPill);
+            });
+        }
+
+        function filterActiveCategory(categoryName) {
+            chosenCategory = categoryName;
+            compileCategories();
+            runningDatabase = (categoryName === "All Questions") ? [...globalDatabase] : globalDatabase.filter(q => q.category === categoryName);
+            resetQuizState();
+        }
+
+        // Generate Matrix Index Numbers for Random Order Access
+        function updateNavigationGrid() {
+            const gridContainer = document.getElementById('navigation-matrix-grid');
+            gridContainer.innerHTML = '';
+
+            runningDatabase.forEach((q, idx) => {
+                const node = document.createElement('div');
+                node.className = 'nav-node';
+                node.innerText = idx + 1;
+
+                // Evaluate Node Status Styling Layer
+                const selectionState = trackingSelections[idx];
+                if (selectionState) {
+                    if (selectionState.status === true) {
+                        node.classList.add('passed-correct');
+                    } else {
+                        node.classList.add('passed-incorrect');
+                    }
+                } else {
+                    node.classList.add('unattended');
+                }
+
+                // Add active tracking node focus configuration
+                if (idx === currentIdx) {
+                    node.classList.add('current-active');
+                }
+
+                // Attach jumping listener payload hook
+                node.onclick = () => jumpToQuestionIndex(idx);
+                gridContainer.appendChild(node);
+            });
+        }
+
+        function jumpToQuestionIndex(targetIndex) {
+            if (targetIndex >= 0 && targetIndex < runningDatabase.length) {
+                currentIdx = targetIndex;
+                internalSelectionKey = null;
+                initializeQuizWorkspace();
+            }
+        }
+
+        function initializeQuizWorkspace() {
+            if (runningDatabase.length === 0) {
+                document.getElementById('question-text-area').innerText = "Empty database payload schema. Upload a valid Excel file to proceed.";
+                document.getElementById('options-wrapper').innerHTML = '';
+                document.getElementById('question-index-tracker').innerText = "Question 0 of 0";
+                document.getElementById('navigation-matrix-grid').innerHTML = '';
+                return;
+            }
+
+            document.getElementById('explanation-box').style.display = 'none';
+            const currentQuestion = runningDatabase[currentIdx];
+            
+            document.getElementById('question-index-tracker').innerText = `Question ${currentIdx + 1} of ${runningDatabase.length}`;
+            document.getElementById('score-tracker').innerText = `Score: ${runningScore}`;
+            
+            // Percentage maps the number of answered entries rather than just indices positions to prevent skips from breaking metrics
+            const totalAnsweredCount = Object.keys(trackingSelections).length;
+            const executionPercentage = (totalAnsweredCount / runningDatabase.length) * 100;
+            document.getElementById('quiz-progress').style.width = `${executionPercentage}%`;
+
+            document.getElementById('badge-q-id').innerText = `ID: ${currentQuestion.id}`;
+            document.getElementById('badge-q-cat').innerText = currentQuestion.category;
+            document.getElementById('question-text-area').innerText = currentQuestion.question;
+
+            const targetContainer = document.getElementById('options-wrapper');
+            targetContainer.innerHTML = '';
+            const activeOptionState = trackingSelections[currentIdx];
+
+            Object.keys(currentQuestion.options).forEach(key => {
+                const textVal = currentQuestion.options[key];
+                if (!textVal) return;
+
+                const optionElement = document.createElement('div');
+                optionElement.className = 'option-row';
+                optionElement.setAttribute('data-key', key);
+
+                const circularBadge = document.createElement('div');
+                circularBadge.className = 'option-prefix';
+                circularBadge.innerText = key;
+
+                const textSpan = document.createElement('div');
+                textSpan.className = 'option-content';
+                textSpan.innerText = textVal;
+
+                optionElement.appendChild(circularBadge);
+                optionElement.appendChild(textSpan);
+
+                if (activeOptionState) {
+                    optionElement.classList.add('disabled');
+                    if (key === currentQuestion.correct) optionElement.classList.add('correct');
+                    if (activeOptionState.chosen === key && key !== currentQuestion.correct) optionElement.classList.add('incorrect');
+                } else {
+                    optionElement.onclick = () => selectOptionElement(optionElement, key);
+                }
+
+                targetContainer.appendChild(optionElement);
+            });
+
+            const actionBtn = document.getElementById('btn-submit');
+            if (activeOptionState) {
+                showExplanationBox(currentQuestion.explanation);
+                actionBtn.innerHTML = currentIdx === runningDatabase.length - 1 ? 'Complete Evaluation <i class="fa-solid fa-flag-checkered"></i>' : 'Next Question <i class="fa-solid fa-arrow-right"></i>';
+                actionBtn.disabled = false;
+            } else {
+                actionBtn.innerHTML = 'Submit Answer <i class="fa-solid fa-check"></i>';
+                actionBtn.disabled = true;
+            }
+
+            document.getElementById('btn-prev').style.visibility = currentIdx === 0 ? 'hidden' : 'visible';
+            
+            // Redraw Navigator Matrix nodes alignment frames
+            updateNavigationGrid();
+        }
+
+        function selectOptionElement(targetElement, key) {
+            document.querySelectorAll('#options-wrapper .option-row').forEach(row => row.classList.remove('selected'));
+            targetElement.classList.add('selected');
+            internalSelectionKey = key;
+            document.getElementById('btn-submit').disabled = false;
+        }
+
+        function handleSubmit() {
+            const activeOptionState = trackingSelections[currentIdx];
+            if (!activeOptionState) {
+                const currentQuestion = runningDatabase[currentIdx];
+                const correctlyIdentified = (internalSelectionKey === currentQuestion.correct);
+                if (correctlyIdentified) runningScore++;
+
+                trackingSelections[currentIdx] = { chosen: internalSelectionKey, status: correctlyIdentified };
+                initializeQuizWorkspace();
+            } else {
+                if (currentIdx < runningDatabase.length - 1) {
+                    currentIdx++;
+                    internalSelectionKey = null;
+                    initializeQuizWorkspace();
+                } else {
+                    renderEvaluationSummaryView();
+                }
+            }
+        }
+
+        function handlePrev() {
+            if (currentIdx > 0) {
+                currentIdx--;
+                internalSelectionKey = null;
+                initializeQuizWorkspace();
+            }
+        }
+
+        function showExplanationBox(explanationStr) {
+            document.getElementById('explanation-text').innerText = explanationStr || "Verified matching database parameters.";
+            document.getElementById('explanation-box').style.display = 'block';
+        }
+
+        function renderEvaluationSummaryView() {
+            document.getElementById('view-quiz').style.display = 'none';
+            const viewResults = document.getElementById('view-results');
+            viewResults.style.display = 'flex';
+            viewResults.classList.add('active');
+
+            document.getElementById('metric-score-ratio').innerText = `${runningScore}/${runningDatabase.length}`;
+            const accuracyCalculation = runningDatabase.length > 0 ? Math.round((runningScore / runningDatabase.length) * 100) : 0;
+            document.getElementById('metric-accuracy').innerText = `${accuracyCalculation}%`;
+            document.getElementById('metric-total').innerText = runningDatabase.length;
+            document.getElementById('quiz-progress').style.width = `100%`;
+        }
+
+        function resetQuizState() {
+            currentIdx = 0;
+            runningScore = 0;
+            internalSelectionKey = null;
+            trackingSelections = {};
+
+            document.getElementById('view-results').style.display = 'none';
+            document.getElementById('view-results').classList.remove('active');
+            document.getElementById('view-quiz').style.display = 'flex';
+            document.getElementById('view-quiz').classList.add('active');
+
+            initializeQuizWorkspace();
+        }
+
+        // ================= BINARY SPREADSHEET PARSING HANDLING =================
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            const feedbackAlertContainer = document.getElementById('parse-status-message');
+            
+            if (!file) return;
+
+            feedbackAlertContainer.style.color = "var(--text-muted)";
+            feedbackAlertContainer.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reading workbook structures...';
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    const freshlyCompiledDataset = [];
+
+                    rawRows.forEach((row, rawIdx) => {
+                        if (!row || row.length === 0 || row[1] === undefined) return;
+
+                        if (row.length < 7) {
+                            if (row.join('').trim() === '') return; 
+                            throw new Error(`Data syntax exception at Row ${rawIdx + 1}. Row must possess all 7 data columns.`);
+                        }
+
+                        const indexVal = row[0] ? String(row[0]).trim() : '';
+                        const coreQuestionStr = String(row[1]).trim();
+                        const optA = String(row[2]).trim();
+                        const optB = String(row[3]).trim();
+                        const optC = String(row[4]).trim();
+                        const optD = String(row[5]).trim();
+                        const validatedKey = String(row[6]).trim().toUpperCase();
+
+                        if (rawIdx === 0 && (validatedKey.includes("CORRECT") || validatedKey === "ANSWER" || validatedKey === "G")) {
+                            return; 
+                        }
+
+                        freshlyCompiledDataset.push({
+                            id: indexVal ? `Q-${indexVal}` : `Q-${rawIdx + 1}`,
+                            category: "Custom Dataset",
+                            question: coreQuestionStr,
+                            options: { A: optA, B: optB, C: optC, D: optD },
+                            correct: validatedKey,
+                            explanation: `Ingested systematically from spreadsheet column row verification fields (${validatedKey}).`
+                        });
+                    });
+
+                    if (freshlyCompiledDataset.length === 0) {
+                        throw new Error("Zero usable database items extracted from target document sheet.");
+                    }
+
+                    globalDatabase = freshlyCompiledDataset;
+                    chosenCategory = "All Questions";
+                    runningDatabase = [...globalDatabase];
+
+                    compileCategories();
+
+                    feedbackAlertContainer.style.color = "var(--success-green)";
+                    feedbackAlertContainer.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${freshlyCompiledDataset.length} items parsed from "${file.name}" successfully!`;
+
+                    setTimeout(() => {
+                        switchMode('quiz');
+                        resetQuizState();
+                        feedbackAlertContainer.innerText = '';
+                        event.target.value = ''; 
+                    }, 1200);
+
+                } catch (err) {
+                    feedbackAlertContainer.style.color = "var(--danger-red)";
+                    feedbackAlertContainer.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> File Error: ${err.message}`;
+                    event.target.value = '';
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+</body>
+</html>
